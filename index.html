@@ -1,0 +1,500 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#0b1220">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>ماسح سيريالات Newland N950</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <style>
+    *{box-sizing:border-box}
+    :root{
+      --bg:#0a0f1a;--card:#111827;--card2:#172033;--line:#2a364b;
+      --text:#f8fafc;--muted:#94a3b8;--green:#16a34a;--green2:#22c55e;
+      --red:#dc2626;--amber:#d97706;--blue:#2563eb;
+    }
+    body{
+      margin:0;background:var(--bg);color:var(--text);
+      font-family:system-ui,-apple-system,"Segoe UI",Tahoma,Arial,sans-serif;
+      min-height:100vh;padding:16px;
+    }
+    .app{width:min(720px,100%);margin:auto}
+    .hero{text-align:center;padding:12px 0 18px}
+    h1{margin:0;font-size:30px}
+    .sub{color:var(--muted);margin-top:7px;font-size:14px}
+    .stats{
+      display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px
+    }
+    .stat{
+      background:var(--card);border:1px solid var(--line);border-radius:18px;
+      padding:14px;text-align:center
+    }
+    .stat .n{font-size:28px;font-weight:900;margin-top:3px}
+    .card{
+      background:var(--card);border:1px solid var(--line);border-radius:20px;
+      padding:16px;margin-bottom:14px
+    }
+    .camera-wrap{
+      position:relative;background:#000;border-radius:16px;overflow:hidden;
+      aspect-ratio:4/3;border:1px solid var(--line)
+    }
+    video{width:100%;height:100%;object-fit:cover;display:block}
+    .scan-box{
+      position:absolute;left:8%;right:8%;top:37%;height:26%;
+      border:3px solid var(--green2);border-radius:14px;
+      box-shadow:0 0 0 9999px rgba(0,0,0,.35);
+      pointer-events:none
+    }
+    .scan-line{
+      position:absolute;left:12%;right:12%;top:50%;height:2px;
+      background:var(--green2);box-shadow:0 0 10px var(--green2);
+      animation:scan 1.7s linear infinite
+    }
+    @keyframes scan{0%{transform:translateY(-42px)}50%{transform:translateY(42px)}100%{transform:translateY(-42px)}}
+    .camera-msg{
+      position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+      text-align:center;padding:20px;color:#d1d5db;background:#030712
+    }
+    .row{display:flex;gap:10px;flex-wrap:wrap}
+    button{
+      border:0;border-radius:14px;padding:14px 16px;font-size:16px;font-weight:800;
+      cursor:pointer;flex:1;min-width:140px
+    }
+    .primary{background:var(--green);color:white}
+    .secondary{background:#273449;color:white}
+    .danger{background:#3b1518;color:#fecaca}
+    .blue{background:var(--blue);color:white}
+    .amber{background:#4a2d08;color:#fed7aa}
+    input{
+      width:100%;padding:14px;border-radius:14px;border:1px solid var(--line);
+      background:var(--card2);color:white;font-size:17px;outline:none
+    }
+    input:focus{border-color:var(--green2)}
+    label{display:block;color:#cbd5e1;font-weight:700;margin-bottom:8px}
+    .hint{color:var(--muted);font-size:13px;margin-top:8px;line-height:1.6}
+    .status{
+      margin-top:12px;padding:12px;border-radius:14px;background:#0f172a;
+      color:#cbd5e1;text-align:center;font-weight:700;min-height:46px
+    }
+    .ok{background:#12331f;color:#86efac}
+    .bad{background:#3d1717;color:#fecaca}
+    .dup{background:#412b0c;color:#fde68a}
+    .toolbar{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .table-wrap{overflow:auto;border:1px solid var(--line);border-radius:14px}
+    table{width:100%;border-collapse:collapse;min-width:520px}
+    th,td{padding:12px;border-bottom:1px solid #243146;text-align:center}
+    th{background:#1c2739;position:sticky;top:0}
+    tr:last-child td{border-bottom:none}
+    .serial{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-weight:800;letter-spacing:.4px}
+    .mini{
+      padding:8px 10px;border-radius:10px;background:#3a1e22;color:#fecaca;
+      min-width:auto;font-size:13px
+    }
+    .empty{padding:24px;text-align:center;color:var(--muted)}
+    .footer-note{color:#64748b;text-align:center;font-size:12px;line-height:1.6;padding:4px 10px 20px}
+    .install{display:none}
+    @media(max-width:520px){
+      body{padding:10px}
+      h1{font-size:25px}
+      .card{padding:12px}
+      .toolbar{grid-template-columns:1fr}
+      button{min-width:0}
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="hero">
+      <h1>📦 ماسح سيريالات الأجهزة</h1>
+      <div class="sub">Newland N950 — امسح باركود SN وسيُضاف تلقائيًا</div>
+    </section>
+
+    <section class="stats">
+      <div class="stat">
+        <div>عدد الأجهزة</div>
+        <div class="n" id="count">0</div>
+      </div>
+      <div class="stat">
+        <div>نوع الجهاز</div>
+        <div class="n" style="font-size:18px;margin-top:10px">Newland N950</div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="camera-wrap">
+        <video id="video" playsinline muted></video>
+        <div class="scan-box" id="scanBox" style="display:none"></div>
+        <div class="scan-line" id="scanLine" style="display:none"></div>
+        <div class="camera-msg" id="cameraMsg">
+          اضغط «تشغيل الكاميرا» ثم وجّه الكاميرا إلى باركود SN
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:12px">
+        <button class="primary" id="startBtn">📷 تشغيل الكاميرا</button>
+        <button class="secondary" id="stopBtn" disabled>⏹️ إيقاف</button>
+      </div>
+
+      <div class="status" id="status">جاهز للمسح</div>
+      <div class="hint">
+        يقبل فقط سيريالات بالشكل: <b>NCD700280982</b>. إذا تم مسح نفس السيريال مرتين فلن يُضاف مرة أخرى.
+      </div>
+    </section>
+
+    <section class="card">
+      <label for="manual">إضافة يدوية عند الحاجة</label>
+      <div class="row">
+        <input id="manual" autocomplete="off" autocapitalize="characters" spellcheck="false"
+               placeholder="NCD700280982">
+        <button class="secondary" id="addManual">➕ إضافة</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="toolbar">
+        <button class="blue" id="excelBtn">📊 تحميل Excel</button>
+        <button class="secondary" id="copyBtn">📋 نسخ الجدول</button>
+        <button class="amber" id="undoBtn">↩️ حذف آخر جهاز</button>
+        <button class="danger" id="clearBtn">🗑️ مسح الكل</button>
+      </div>
+      <button class="secondary install" id="installBtn">📲 تثبيت التطبيق على الجوال</button>
+    </section>
+
+    <section class="card">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>نوع الجهاز</th>
+              <th>Serial Number</th>
+              <th>حذف</th>
+            </tr>
+          </thead>
+          <tbody id="tbody"></tbody>
+        </table>
+        <div class="empty" id="empty">لا توجد أجهزة ممسوحة حتى الآن.</div>
+      </div>
+    </section>
+
+    <div class="footer-note">
+      البيانات محفوظة على هذا الجوال فقط. التطبيق لا يرسل السيريالات إلى أي سيرفر.
+    </div>
+  </main>
+
+<script>
+const MODEL = "Newland N950";
+const SERIAL_RE = /^NCD\d{9}$/i;
+const STORAGE_KEY = "newland_n950_serials_v1";
+
+let items = loadItems();
+let stream = null;
+let detector = null;
+let scanning = false;
+let lastSeen = "";
+let lastSeenAt = 0;
+let scanTimer = null;
+
+const video = document.getElementById("video");
+const startBtn = document.getElementById("startBtn");
+const stopBtn = document.getElementById("stopBtn");
+const statusEl = document.getElementById("status");
+const tbody = document.getElementById("tbody");
+const empty = document.getElementById("empty");
+const count = document.getElementById("count");
+const cameraMsg = document.getElementById("cameraMsg");
+const scanBox = document.getElementById("scanBox");
+const scanLine = document.getElementById("scanLine");
+const manual = document.getElementById("manual");
+
+function normalizeSerial(v){
+  return String(v || "").trim().toUpperCase().replace(/\s+/g,"");
+}
+
+function loadItems(){
+  try{
+    const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+    return Array.isArray(raw) ? raw.filter(x => x && SERIAL_RE.test(x.serial || "")) : [];
+  }catch{
+    return [];
+  }
+}
+
+function saveItems(){
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+}
+
+function setStatus(text, kind=""){
+  statusEl.className = "status" + (kind ? " " + kind : "");
+  statusEl.textContent = text;
+}
+
+function feedback(){
+  try{ navigator.vibrate?.(70); }catch{}
+  try{
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.frequency.value = 880;
+    gain.gain.value = 0.06;
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.start();
+    setTimeout(()=>{ osc.stop(); ctx.close(); }, 90);
+  }catch{}
+}
+
+function addSerial(raw){
+  const serial = normalizeSerial(raw);
+
+  if(!SERIAL_RE.test(serial)){
+    setStatus("❌ هذا ليس سيريال N950 صالحًا: " + serial, "bad");
+    return false;
+  }
+
+  if(items.some(x => x.serial === serial)){
+    setStatus("⚠️ السيريال موجود مسبقًا: " + serial, "dup");
+    return false;
+  }
+
+  items.push({
+    model: MODEL,
+    serial,
+    addedAt: new Date().toISOString()
+  });
+  saveItems();
+  render();
+  setStatus("✅ تمت الإضافة: " + serial, "ok");
+  feedback();
+  return true;
+}
+
+function render(){
+  tbody.innerHTML = "";
+  count.textContent = items.length;
+  empty.style.display = items.length ? "none" : "block";
+
+  items.forEach((item, idx)=>{
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${idx+1}</td>
+      <td>${MODEL}</td>
+      <td class="serial">${item.serial}</td>
+      <td><button class="mini" data-index="${idx}">حذف</button></td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  tbody.querySelectorAll(".mini").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      const i = Number(btn.dataset.index);
+      items.splice(i,1);
+      saveItems(); render();
+      setStatus("تم حذف السطر.", "");
+    });
+  });
+}
+
+async function startCamera(){
+  if(!("mediaDevices" in navigator) || !navigator.mediaDevices.getUserMedia){
+    setStatus("❌ المتصفح لا يدعم تشغيل الكاميرا.", "bad");
+    return;
+  }
+
+  if(!("BarcodeDetector" in window)){
+    setStatus("❌ ماسح الباركود غير مدعوم في هذا المتصفح. استخدم Chrome على Android أو الإدخال اليدوي.", "bad");
+    return;
+  }
+
+  try{
+    const formats = await BarcodeDetector.getSupportedFormats();
+    const wanted = ["code_128","code_39","ean_13","ean_8","itf","codabar"].filter(x=>formats.includes(x));
+    detector = new BarcodeDetector({formats: wanted.length ? wanted : formats});
+
+    stream = await navigator.mediaDevices.getUserMedia({
+      video:{
+        facingMode:{ideal:"environment"},
+        width:{ideal:1280},
+        height:{ideal:720},
+        focusMode:"continuous"
+      },
+      audio:false
+    });
+
+    video.srcObject = stream;
+    await video.play();
+
+    scanning = true;
+    startBtn.disabled = true;
+    stopBtn.disabled = false;
+    cameraMsg.style.display = "none";
+    scanBox.style.display = "block";
+    scanLine.style.display = "block";
+    setStatus("📷 وجّه الكاميرا إلى باركود SN", "");
+
+    scanLoop();
+  }catch(err){
+    setStatus("❌ تعذر تشغيل الكاميرا. تأكد من السماح بإذن الكاميرا.", "bad");
+    cameraMsg.style.display = "flex";
+    cameraMsg.textContent = "تعذر تشغيل الكاميرا";
+  }
+}
+
+function stopCamera(){
+  scanning = false;
+  if(scanTimer) cancelAnimationFrame(scanTimer);
+  scanTimer = null;
+
+  if(stream){
+    stream.getTracks().forEach(t=>t.stop());
+    stream = null;
+  }
+  video.srcObject = null;
+  startBtn.disabled = false;
+  stopBtn.disabled = true;
+  cameraMsg.style.display = "flex";
+  cameraMsg.textContent = "اضغط «تشغيل الكاميرا» للمتابعة";
+  scanBox.style.display = "none";
+  scanLine.style.display = "none";
+}
+
+async function scanLoop(){
+  if(!scanning) return;
+
+  try{
+    if(video.readyState >= 2 && detector){
+      const codes = await detector.detect(video);
+
+      for(const code of codes){
+        const value = normalizeSerial(code.rawValue);
+        const now = Date.now();
+
+        if(value === lastSeen && now-lastSeenAt < 1200) continue;
+        lastSeen = value;
+        lastSeenAt = now;
+
+        if(SERIAL_RE.test(value)){
+          addSerial(value);
+          break;
+        }
+      }
+    }
+  }catch{}
+
+  scanTimer = requestAnimationFrame(scanLoop);
+}
+
+document.getElementById("startBtn").addEventListener("click", startCamera);
+document.getElementById("stopBtn").addEventListener("click", stopCamera);
+
+document.getElementById("addManual").addEventListener("click", ()=>{
+  if(addSerial(manual.value)) manual.value = "";
+});
+manual.addEventListener("keydown", e=>{
+  if(e.key==="Enter"){
+    if(addSerial(manual.value)) manual.value = "";
+  }
+});
+
+document.getElementById("undoBtn").addEventListener("click", ()=>{
+  if(!items.length){
+    setStatus("القائمة فارغة.", "");
+    return;
+  }
+  const removed = items.pop();
+  saveItems(); render();
+  setStatus("↩️ تم حذف آخر جهاز: " + removed.serial, "");
+});
+
+document.getElementById("clearBtn").addEventListener("click", ()=>{
+  if(!items.length) return;
+  if(confirm("هل أنت متأكد من مسح جميع الأجهزة؟")){
+    items = [];
+    saveItems(); render();
+    setStatus("تم مسح القائمة.", "");
+  }
+});
+
+document.getElementById("copyBtn").addEventListener("click", async ()=>{
+  if(!items.length){
+    setStatus("لا توجد بيانات لنسخها.", "bad");
+    return;
+  }
+  const lines = ["نوع الجهاز\tSerial Number"];
+  items.forEach(x=>lines.push(`${MODEL}\t${x.serial}`));
+  const txt = lines.join("\n");
+  try{
+    await navigator.clipboard.writeText(txt);
+    setStatus("✅ تم نسخ الجدول.", "ok");
+  }catch{
+    setStatus("تعذر النسخ من المتصفح.", "bad");
+  }
+});
+
+function htmlEscape(s){
+  return String(s).replace(/[&<>"']/g, c=>({
+    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+  }[c]));
+}
+
+document.getElementById("excelBtn").addEventListener("click", ()=>{
+  if(!items.length){
+    setStatus("لا توجد بيانات لإنشاء الملف.", "bad");
+    return;
+  }
+
+  // ملف .xls بصيغة HTML متوافقة مع Excel بدون أي مكتبة خارجية.
+  const rows = items.map((x,i)=>`
+    <tr>
+      <td>${i+1}</td>
+      <td>${htmlEscape(MODEL)}</td>
+      <td style="mso-number-format:'\\@'">${htmlEscape(x.serial)}</td>
+    </tr>`).join("");
+
+  const html = `<!doctype html>
+  <html><head><meta charset="utf-8"></head><body>
+  <table border="1">
+    <tr><th>#</th><th>نوع الجهاز</th><th>Serial Number</th></tr>
+    ${rows}
+  </table>
+  </body></html>`;
+
+  const blob = new Blob(["\ufeff", html], {type:"application/vnd.ms-excel;charset=utf-8"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  const stamp = new Date().toISOString().slice(0,10);
+  a.href = url;
+  a.download = `Newland_N950_Serials_${stamp}.xls`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 1000);
+  setStatus("✅ تم إنشاء ملف Excel.", "ok");
+});
+
+let deferredPrompt = null;
+const installBtn = document.getElementById("installBtn");
+window.addEventListener("beforeinstallprompt", e=>{
+  e.preventDefault();
+  deferredPrompt = e;
+  installBtn.style.display = "block";
+});
+installBtn.addEventListener("click", async ()=>{
+  if(!deferredPrompt) return;
+  deferredPrompt.prompt();
+  await deferredPrompt.userChoice;
+  deferredPrompt = null;
+  installBtn.style.display = "none";
+});
+
+window.addEventListener("beforeunload", stopCamera);
+
+if("serviceWorker" in navigator){
+  window.addEventListener("load", ()=>navigator.serviceWorker.register("sw.js"));
+}
+
+render();
+</script>
+</body>
+</html>
