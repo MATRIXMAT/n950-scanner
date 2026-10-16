@@ -95,6 +95,18 @@
     .empty{padding:24px;text-align:center;color:var(--muted)}
     .footer-note{color:#64748b;text-align:center;font-size:12px;line-height:1.6;padding:4px 10px 20px}
     .install{display:none}
+
+    .camera-tools{
+      display:none;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px
+    }
+    .camera-tools button{margin-top:0;min-width:0}
+    .zoom-wrap{
+      display:none;margin-top:12px;background:#0f172a;border:1px solid var(--line);
+      border-radius:14px;padding:12px
+    }
+    .zoom-head{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:8px;color:#cbd5e1;font-weight:700}
+    input[type="range"]{padding:0;height:34px;accent-color:var(--green2);background:transparent;border:0}
+
     @media(max-width:520px){
       body{padding:10px}
       h1{font-size:25px}
@@ -135,6 +147,19 @@
       <div class="row" style="margin-top:12px">
         <button class="primary" id="startBtn">📷 تشغيل الكاميرا</button>
         <button class="secondary" id="stopBtn" disabled>⏹️ إيقاف</button>
+      </div>
+
+      <div class="camera-tools" id="cameraTools">
+        <button class="secondary" id="refocusBtn">🎯 تحسين التركيز</button>
+        <button class="secondary" id="torchBtn" style="display:none">🔦 تشغيل الفلاش</button>
+      </div>
+
+      <div class="zoom-wrap" id="zoomWrap">
+        <div class="zoom-head">
+          <span>🔍 تكبير الكاميرا</span>
+          <span id="zoomValue">1.0×</span>
+        </div>
+        <input id="zoomSlider" type="range" min="1" max="1" step="0.1" value="1">
       </div>
 
       <div class="status" id="status">جاهز للمسح</div>
@@ -196,6 +221,8 @@ let scanning = false;
 let lastSeen = "";
 let lastSeenAt = 0;
 let scanTimer = null;
+let videoTrack = null;
+let torchOn = false;
 
 const video = document.getElementById("video");
 const startBtn = document.getElementById("startBtn");
@@ -208,6 +235,12 @@ const cameraMsg = document.getElementById("cameraMsg");
 const scanBox = document.getElementById("scanBox");
 const scanLine = document.getElementById("scanLine");
 const manual = document.getElementById("manual");
+const cameraTools = document.getElementById("cameraTools");
+const refocusBtn = document.getElementById("refocusBtn");
+const torchBtn = document.getElementById("torchBtn");
+const zoomWrap = document.getElementById("zoomWrap");
+const zoomSlider = document.getElementById("zoomSlider");
+const zoomValue = document.getElementById("zoomValue");
 
 function normalizeSerial(v){
   return String(v || "").trim().toUpperCase().replace(/\s+/g,"");
@@ -315,9 +348,9 @@ async function startCamera(){
     stream = await navigator.mediaDevices.getUserMedia({
       video:{
         facingMode:{ideal:"environment"},
-        width:{ideal:1280},
-        height:{ideal:720},
-        focusMode:"continuous"
+        width:{ideal:1920},
+        height:{ideal:1080},
+        frameRate:{ideal:30,max:30}
       },
       audio:false
     });
@@ -325,19 +358,66 @@ async function startCamera(){
     video.srcObject = stream;
     await video.play();
 
+    videoTrack = stream.getVideoTracks()[0] || null;
+    await optimizeCamera();
+
     scanning = true;
     startBtn.disabled = true;
     stopBtn.disabled = false;
     cameraMsg.style.display = "none";
     scanBox.style.display = "block";
     scanLine.style.display = "block";
-    setStatus("📷 وجّه الكاميرا إلى باركود SN", "");
+    cameraTools.style.display = "grid";
+    setStatus("📷 خلك على بعد 15–25 سم من الباركود ثم استخدم التكبير إذا احتجت.", "");
 
     scanLoop();
   }catch(err){
+    console.error(err);
     setStatus("❌ تعذر تشغيل الكاميرا. تأكد من السماح بإذن الكاميرا.", "bad");
     cameraMsg.style.display = "flex";
     cameraMsg.textContent = "تعذر تشغيل الكاميرا";
+  }
+}
+
+async function optimizeCamera(){
+  if(!videoTrack) return;
+  let caps = {};
+  try{ caps = videoTrack.getCapabilities ? videoTrack.getCapabilities() : {}; }catch{}
+
+  const advanced = [];
+  if(Array.isArray(caps.focusMode) && caps.focusMode.includes("continuous")) advanced.push({focusMode:"continuous"});
+  if(Array.isArray(caps.exposureMode) && caps.exposureMode.includes("continuous")) advanced.push({exposureMode:"continuous"});
+  if(Array.isArray(caps.whiteBalanceMode) && caps.whiteBalanceMode.includes("continuous")) advanced.push({whiteBalanceMode:"continuous"});
+  if(advanced.length){ try{ await videoTrack.applyConstraints({advanced}); }catch{} }
+
+  if(caps.zoom && Number.isFinite(caps.zoom.min) && Number.isFinite(caps.zoom.max)){
+    const min=caps.zoom.min, max=caps.zoom.max, step=caps.zoom.step || 0.1;
+    zoomSlider.min=min; zoomSlider.max=max; zoomSlider.step=step;
+    const preferred=Math.min(max,Math.max(min,1.7));
+    zoomSlider.value=preferred;
+    zoomValue.textContent=preferred.toFixed(1)+"×";
+    zoomWrap.style.display="block";
+    try{ await videoTrack.applyConstraints({advanced:[{zoom:preferred}]}); }catch{}
+  }else{
+    zoomWrap.style.display="none";
+  }
+
+  if(caps.torch===true) torchBtn.style.display="block";
+  else torchBtn.style.display="none";
+}
+
+async function refocusCamera(){
+  if(!videoTrack) return;
+  try{
+    const caps=videoTrack.getCapabilities ? videoTrack.getCapabilities() : {};
+    if(Array.isArray(caps.focusMode) && caps.focusMode.includes("continuous")){
+      await videoTrack.applyConstraints({advanced:[{focusMode:"continuous"}]});
+      setStatus("🎯 تم تحسين التركيز. ثبّت الجوال لحظة.", "ok");
+    }else{
+      setStatus("ℹ️ ابتعد قليلًا عن الباركود حتى يضبط الجوال التركيز تلقائيًا.", "");
+    }
+  }catch{
+    setStatus("ℹ️ ابتعد قليلًا عن الباركود حتى يضبط الجوال التركيز تلقائيًا.", "");
   }
 }
 
@@ -351,6 +431,12 @@ function stopCamera(){
     stream = null;
   }
   video.srcObject = null;
+  videoTrack = null;
+  torchOn = false;
+  cameraTools.style.display = "none";
+  zoomWrap.style.display = "none";
+  torchBtn.style.display = "none";
+  torchBtn.textContent = "🔦 تشغيل الفلاش";
   startBtn.disabled = false;
   stopBtn.disabled = true;
   cameraMsg.style.display = "flex";
@@ -387,6 +473,27 @@ async function scanLoop(){
 
 document.getElementById("startBtn").addEventListener("click", startCamera);
 document.getElementById("stopBtn").addEventListener("click", stopCamera);
+
+refocusBtn.addEventListener("click", refocusCamera);
+
+zoomSlider.addEventListener("input", async ()=>{
+  if(!videoTrack) return;
+  const z=Number(zoomSlider.value);
+  zoomValue.textContent=z.toFixed(1)+"×";
+  try{ await videoTrack.applyConstraints({advanced:[{zoom:z}]}); }catch{}
+});
+
+torchBtn.addEventListener("click", async ()=>{
+  if(!videoTrack) return;
+  torchOn=!torchOn;
+  try{
+    await videoTrack.applyConstraints({advanced:[{torch:torchOn}]});
+    torchBtn.textContent=torchOn ? "🔦 إطفاء الفلاش" : "🔦 تشغيل الفلاش";
+  }catch{
+    torchOn=false;
+    setStatus("تعذر التحكم بالفلاش من هذا المتصفح.", "bad");
+  }
+});
 
 document.getElementById("addManual").addEventListener("click", ()=>{
   if(addSerial(manual.value)) manual.value = "";
