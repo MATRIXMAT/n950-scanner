@@ -166,6 +166,7 @@
       <div class="hint">
         يقبل فقط سيريالات بالشكل: <b>NCD700280982</b>. إذا تم مسح نفس السيريال مرتين فلن يُضاف مرة أخرى.
         عند نجاح المسح سيصدر <b>صوت واضح + اهتزاز + وميض أخضر</b>.
+        وإذا حاولت مسح سيريال موجود مسبقًا سيصدر <b>صوت خطأ + اهتزاز + وميض أحمر</b>.
         لأفضل دقة: ابعد الجوال قليلًا واستخدم التكبير بدل تقريب العدسة من الباركود.
       </div>
     </section>
@@ -222,6 +223,7 @@ let detector = null;
 let scanning = false;
 let lastSeen = "";
 let lastSeenAt = 0;
+let lastValidVisibleAt = 0;
 let scanTimer = null;
 let videoTrack = null;
 let torchOn = false;
@@ -313,6 +315,50 @@ function feedback(){
   }catch{}
 }
 
+
+function duplicateFeedback(){
+  try{
+    navigator.vibrate?.([220, 90, 220]);
+  }catch{}
+
+  try{
+    unlockAudio();
+    if(audioCtx){
+      const now = audioCtx.currentTime;
+
+      function errorTone(freq, start, duration){
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+
+        osc.type = "square";
+        osc.frequency.setValueAtTime(freq, start);
+
+        gain.gain.setValueAtTime(0.0001, start);
+        gain.gain.exponentialRampToValueAtTime(0.20, start + 0.01);
+        gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+
+        osc.start(start);
+        osc.stop(start + duration + 0.02);
+      }
+
+      errorTone(520, now, 0.18);
+      errorTone(300, now + 0.20, 0.25);
+    }
+  }catch{}
+
+  document.body.animate(
+    [
+      {boxShadow:"inset 0 0 0 0 rgba(239,68,68,0)"},
+      {boxShadow:"inset 0 0 0 9px rgba(239,68,68,.95)"},
+      {boxShadow:"inset 0 0 0 0 rgba(239,68,68,0)"}
+    ],
+    {duration:520, easing:"ease-out"}
+  );
+}
+
 function addSerial(raw){
   const serial = normalizeSerial(raw);
 
@@ -322,7 +368,8 @@ function addSerial(raw){
   }
 
   if(items.some(x => x.serial === serial)){
-    setStatus("⚠️ السيريال موجود مسبقًا: " + serial, "dup");
+    setStatus("❌ السيريال موجود مسبقًا ولم تتم إضافته: " + serial, "dup");
+    duplicateFeedback();
     return false;
   }
 
@@ -499,19 +546,33 @@ async function scanLoop(){
   try{
     if(video.readyState >= 2 && detector){
       const codes = await detector.detect(video);
+      const now = Date.now();
+      let sawValidSerial = false;
 
       for(const code of codes){
         const value = normalizeSerial(code.rawValue);
-        const now = Date.now();
 
-        if(value === lastSeen && now-lastSeenAt < 1200) continue;
-        lastSeen = value;
-        lastSeenAt = now;
+        if(!SERIAL_RE.test(value)) continue;
 
-        if(SERIAL_RE.test(value)){
-          addSerial(value);
+        sawValidSerial = true;
+        lastValidVisibleAt = now;
+
+        // نفس الباركود وهو ما زال أمام الكاميرا: لا نعيد معالجته.
+        if(value === lastSeen){
           break;
         }
+
+        lastSeen = value;
+        lastSeenAt = now;
+        addSerial(value);
+        break;
+      }
+
+      // بعد إبعاد الباركود عن الكاميرا لمدة قصيرة نسمح بقراءته مرة أخرى.
+      // إذا كان مكررًا وقتها سيصدر صوت الخطأ الأحمر.
+      if(!sawValidSerial && lastSeen && (now - lastValidVisibleAt > 700)){
+        lastSeen = "";
+        lastSeenAt = 0;
       }
     }
   }catch{}
