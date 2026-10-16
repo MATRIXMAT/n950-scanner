@@ -165,6 +165,8 @@
       <div class="status" id="status">جاهز للمسح</div>
       <div class="hint">
         يقبل فقط سيريالات بالشكل: <b>NCD700280982</b>. إذا تم مسح نفس السيريال مرتين فلن يُضاف مرة أخرى.
+        عند نجاح المسح سيصدر <b>صوت واضح + اهتزاز + وميض أخضر</b>.
+        لأفضل دقة: ابعد الجوال قليلًا واستخدم التكبير بدل تقريب العدسة من الباركود.
       </div>
     </section>
 
@@ -223,6 +225,7 @@ let lastSeenAt = 0;
 let scanTimer = null;
 let videoTrack = null;
 let torchOn = false;
+let audioCtx = null;
 
 const video = document.getElementById("video");
 const startBtn = document.getElementById("startBtn");
@@ -264,17 +267,49 @@ function setStatus(text, kind=""){
   statusEl.textContent = text;
 }
 
-function feedback(){
-  try{ navigator.vibrate?.(70); }catch{}
+function unlockAudio(){
   try{
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.frequency.value = 880;
-    gain.gain.value = 0.06;
-    osc.connect(gain); gain.connect(ctx.destination);
-    osc.start();
-    setTimeout(()=>{ osc.stop(); ctx.close(); }, 90);
+    if(!audioCtx){
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if(audioCtx.state === "suspended"){
+      audioCtx.resume();
+    }
+  }catch{}
+}
+
+function feedback(){
+  try{
+    navigator.vibrate?.([140, 70, 140]);
+  }catch{}
+
+  try{
+    unlockAudio();
+    if(!audioCtx) return;
+
+    const now = audioCtx.currentTime;
+
+    function tone(freq, start, duration){
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(freq, start);
+
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.exponentialRampToValueAtTime(0.28, start + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+
+      osc.start(start);
+      osc.stop(start + duration + 0.02);
+    }
+
+    tone(950,  now,        0.13);
+    tone(1350, now + 0.15, 0.16);
+
   }catch{}
 }
 
@@ -298,8 +333,19 @@ function addSerial(raw){
   });
   saveItems();
   render();
-  setStatus("✅ تمت الإضافة: " + serial, "ok");
+  setStatus("✅ تم المسح والإضافة: " + serial, "ok");
   feedback();
+
+  // وميض أخضر سريع ليعرف المستخدم أن الجهاز انضاف حتى لو ما كان ينظر للجدول
+  document.body.animate(
+    [
+      {boxShadow:"inset 0 0 0 0 rgba(34,197,94,0)"},
+      {boxShadow:"inset 0 0 0 8px rgba(34,197,94,.9)"},
+      {boxShadow:"inset 0 0 0 0 rgba(34,197,94,0)"}
+    ],
+    {duration:420, easing:"ease-out"}
+  );
+
   return true;
 }
 
@@ -330,6 +376,8 @@ function render(){
 }
 
 async function startCamera(){
+  unlockAudio();
+
   if(!("mediaDevices" in navigator) || !navigator.mediaDevices.getUserMedia){
     setStatus("❌ المتصفح لا يدعم تشغيل الكاميرا.", "bad");
     return;
